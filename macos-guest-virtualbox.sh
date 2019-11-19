@@ -1,8 +1,8 @@
 #!/bin/bash
 # Semi-automatic installer of macOS on VirtualBox
 # (c) myspaghetti, licensed under GPL2.0 or higher
-# url: https://github.com/myspaghetti/macos-guest-virtualbox
-# version 0.76.2
+# url: https://github.com/img2tab/macos-guest-virtualbox
+# version 0.75.2
 
 # Requirements: 40GB available storage on host
 # Dependencies: bash >= 4.0, unzip, wget, dmg2img,
@@ -11,15 +11,14 @@
 function set_variables() {
 # Customize the installation by setting these variables:
 vmname="macOS"                   # name of the VirtualBox virtual machine
-storagesize=25000                # VM disk image size in MB. minimum 22000
-cpucount=2                       # VM CPU cores, minimum 2
-memorysize=4096                  # VM RAM in MB, minimum 2048
+storagesize=96000                # VM disk image size in MB. minimum 22000
+cpucount=4                       # VM CPU cores, minimum 2
+memorysize=8192                  # VM RAM in MB, minimum 2048
 gpuvram=128                      # VM video RAM in MB, minimum 34, maximum 128
-resolution="1280x800"            # VM display resolution
+resolution="1920x1080"           # VM display resolution
 
-# The following commented commands, when run on a genuine Mac,
-# may provide the values for the parameters required by iCloud, iMessage,
-# and other connected Apple applications.
+# The following commented commands may provide the values for the parameters
+# required by iCloud, iMessage, and other connected Apple applications.
 # Parameters taken from a genuine Mac may result in a "Call customer support"
 # message if they do not match the genuine Mac exactly.
 # Non-genuine yet genuine-like parameters usually work.
@@ -65,7 +64,7 @@ else
         SYSTEM_UUID="bytes:qrvM3e7/ABEiM0RVZneImQ=="
         SYSTEM_INTEGRITY_PROTECTION="bytes:EA=="
      else
-        echo "ROM, UUID, or SIP variables have been assigned non-default values. Applying"
+        echo "ROM, UUID, and SIP variables have been assigned non-default values. Applying"
         echo "these values to the virtual machine requires the package xxd. Please make sure"
         echo "the package xxd is installed."
         echo "Exiting."
@@ -193,15 +192,6 @@ if [ -n "$(cygcheck -V 2>/dev/null)" ]; then
     fi
 # Windows Subsystem for Linux (WSL)
 elif [[ "$(cat /proc/sys/kernel/osrelease 2>/dev/null)" =~ Microsoft ]]; then
-    if [[ ! ( "$(cat /proc/sys/kernel/osrelease 2>/dev/null)" =~ 18362-Microsoft ) ]]; then
-        echo ""
-        echo "The script requires Windows 10 version 1903 or higher to run properly on WSL."
-        echo "For lower versions, please run the script on a path on the Windows filesystem,"
-        printf 'for example  '"${white_on_black}"'/mnt/c/Users/Public/Documents'"${default_color}"
-        echo ""
-        printf "${white_on_black}"'Press enter to continue, CTRL-C to exit.'"${default_color}"
-        read
-    fi
     if [ -n "$(VBoxManage.exe -v 2>/dev/null)" ]; then
         function VBoxManage() {
             VBoxManage.exe "$@"
@@ -282,12 +272,14 @@ fi
 # prompt for macOS version
 HighSierra_sucatalog='https://swscan.apple.com/content/catalogs/others/index-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
 Mojave_sucatalog='https://swscan.apple.com/content/catalogs/others/index-10.14-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
-Catalina_sucatalog='https://swscan.apple.com/content/catalogs/others/index-10.15-10.14-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
+Catalina_beta_sucatalog='https://swscan.apple.com/content/catalogs/others/index-10.15seed-10.15-10.14-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
+# Catalina public release not yet available
+# Catalina_sucatalog='https://swscan.apple.com/content/catalogs/others/index-10.15-10.14-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
 printf "${white_on_black}"'
 Press a key to select the macOS version to install on the virtual machine:'"${default_color}"'
  [H]igh Sierra (10.13)
  [M]ojave (10.14)
- [C]atalina (10.15)
+ [C]atalina (10.15 beta)
 
 '
 read -n 1 -p " [H/M/C] " macOS_release_name 2>/dev/tty
@@ -303,7 +295,7 @@ elif [ "${macOS_release_name^^}" == "M" ]; then
 else
     macOS_release_name="Catalina"
     CFBundleShortVersionString="10.15"
-    sucatalog="${Catalina_sucatalog}"
+    sucatalog="${Catalina_beta_sucatalog}"
 fi
 echo "${macOS_release_name} selected"
 }
@@ -409,14 +401,11 @@ load fs0:\EFI\driver\AppleUiSupport.efi
 load fs0:\EFI\driver\ApfsDriverLoader.efi
 map -r
 for %a run (1 5)
-  if exist "fs%a:\macOS Install Data\Locked Files\Boot Files\boot.efi" then
-    "fs%a:\macOS Install Data\Locked Files\Boot Files\boot.efi"
-  endif
-endfor
-for %a run (1 5)
-  if exist "fs%a:\System\Library\CoreServices\boot.efi" then
-    "fs%a:\System\Library\CoreServices\boot.efi"
-  endif
+  fs%a:
+  cd "macOS Install Data\Locked Files\Boot Files"
+  boot.efi
+  cd "System\Library\CoreServices"
+  boot.efi
 endfor' > "startup.nsh"
 }
 
@@ -843,12 +832,19 @@ prompt_lang_utils
 prompt_terminal_ready
 
 # Start the installer.
-kbstring='app_path="$(ls -d /Install*.app)" && cd "/${app_path}/Contents/Resources/"; ./startosinstall --agreetolicense --volume "/Volumes/'"${vmname}"'"'
+kbstring='app_path="$(ls -d /Install*.app)" && cd "/${app_path}/Contents/Resources/"; ./startosinstall --volume "/Volumes/'"${vmname}"'"'
 send_keys
+printf "${white_on_black}"'
+Installer started. Please wait for the license prompt to appear at
+the bottom of the virtual machine terminal, then press enter here.
+This will accept the license on the virtual machine.'"${default_color}"
+read -p ""
+kbspecial="A ENTER"
+send_special
+
 echo ""
-echo "Installer started."
 echo "When the installer finishes preparing, the virtual machine will reboot"
-echo "into the base system again, not the installer."
+echo "into the base system, not the installer."
 }
 
 function place_efi_apfs_drivers {
